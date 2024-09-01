@@ -2,7 +2,7 @@
 
 import { Button, Frog, TextInput } from 'frog'
 import { devtools } from 'frog/dev'
-import { neynar } from 'frog/hubs'
+// import { neynar } from 'frog/hubs'
 import { handle } from 'frog/next'
 import { serveStatic } from 'frog/serve-static'
 import { getMintClubContractAddress, BOND_ABI, generateCreateArgs, mintclub } from 'mint.club-v2-sdk'
@@ -29,7 +29,7 @@ const app = new Frog<{State: State}>({
     link: process.env.BASE_URL || 'https://frame.fun',
   },  
   // Supply a Hub to enable frame verification.
-  hub: neynar({ apiKey: process.env.NEYNAR_KEY || '' })
+  // hub: neynar({ apiKey: process.env.NEYNAR_KEY || '' })
 })
 
 // Uncomment to use Edge Runtime
@@ -142,7 +142,7 @@ app.frame('/deploy', async (c) => {
   const twitterId = s.link.split('/').pop()
 
   return c.res({
-    action: '/deployed',
+    action: '/wait',
     image: (
       getDeployPageImage(s)
     ),
@@ -153,12 +153,8 @@ app.frame('/deploy', async (c) => {
   })
 })
 
-app.frame('/deployed', async (c) => {
-  const { transactionId, deriveState } = c
-  let symbol = ''
-  deriveState(state => {
-    symbol = state.symbol
-  })
+app.frame('/wait', async (c) => {
+  const { transactionId } = c
 
   if (!transactionId) {
     return c.res({
@@ -169,10 +165,33 @@ app.frame('/deployed', async (c) => {
     })
   }
 
-  // Sleep 4 seconds
-  await new Promise(resolve => setTimeout(resolve, 4000))
+  return c.res({
+    image: ( '/Wait.png'),
+    intents: [
+      <Button value={transactionId} action="/deployed">Next</Button>,
+    ],
+  })
+})
 
-  const args = await findTokenCreatedEvent(transactionId)
+
+app.frame('/deployed', async (c) => {
+  const { buttonValue, deriveState } = c
+  let symbol = ''
+  deriveState(state => {
+    symbol = state.symbol
+  })
+
+  if (!buttonValue) {
+    return c.res({
+      image: ( '/Error.png'),
+      intents: [
+        <Button action="/">Back</Button>,
+      ],
+    })
+  }
+  
+  const txId:`0x${string}` = `0x${buttonValue.substring(2)}`
+  const args = await findTokenCreatedEvent(txId)
   if (!args) {
     return c.res({
       image: ( '/Error.png'),
@@ -184,7 +203,11 @@ app.frame('/deployed', async (c) => {
 
   const tokenAddr: string = args.token
 
-  const shareUrl = `${process.env.BASE_URL}/share/${symbol}/${tokenAddr}`
+  const frameUrl = `${process.env.BASE_URL}/share/${symbol}/${tokenAddr}`
+  const message = `I just minted a token named ${symbol} with Mint Club!`
+  const urlMessage = message.replace(/ /g, '%20')
+  const shareUrl = `https://warpcast.com/~/compose?text=${urlMessage}&embeds[]=${frameUrl}`
+
   return c.res({
     image: (getResultPageImage(symbol, tokenAddr)),
     intents: [
